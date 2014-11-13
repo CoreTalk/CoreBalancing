@@ -1,7 +1,11 @@
+// Copyright © 2014 CoreTalk Authors. All rights reserved.
+// Use of this source code is governed by a BSD-style
+// license that can be found in the LICENSE file.
+
 package main
 
 import (
-	"time"
+	"strconv"
 
 	"github.com/coreos/go-etcd/etcd"
 )
@@ -24,20 +28,10 @@ func get_machines() error {
 	return nil
 }
 
-func flush() {
-	C := time.After(time.Duration(Conf.Interval))
-	for {
-		select {
-		case <-C:
-			get_machines()
-		}
-	}
-}
-
-func set_list(nodes []etcd.Node) {
+func set_list(nodes []*etcd.Node) {
 	for _, n := range nodes {
 		s := pool.Get().(*Server)
 		s.Address = n.Key
-		s.Load = n.Value
+		s.Load, _ = strconv.ParseInt(n.Value, 10, 64)
 	}
 }
