@@ -22,17 +22,24 @@ func InitSignal() chan os.Signal {
 
 // HandleSignal fetch signal from chan then do exit or reload.
 func HandleSignal(c chan os.Signal) {
+	err_ch := heart_beat()
 	// Block until a signal is received.
 	for {
-		s := <-c
-		log.Printf("comet get a signal %s", s.String())
-		switch s {
-		// case syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGSTOP, syscall.SIGINT:
-		// 	return
-		case syscall.SIGHUP:
-			// TODO reload
-			//return
-		default:
+		select {
+		case s := <-c:
+			log.Printf("comet get a signal %s", s.String())
+			switch s {
+			// case syscall.SIGQUIT, syscall.SIGTERM, syscall.SIGSTOP, syscall.SIGINT:
+			// 	return
+			case syscall.SIGHUP:
+				// TODO reload
+				//return
+			default:
+				return
+			}
+
+		case err := <-err_ch:
+			log.Println(err)
 			return
 		}
 	}

@@ -20,6 +20,9 @@ type Config struct {
 
 	// [IP]:[prot]
 	Listen_addr string
+
+	// Heart beat time.
+	Heart_beat_time string
 }
 
 func pare_config() error {

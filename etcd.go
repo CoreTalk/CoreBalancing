@@ -6,6 +6,7 @@ package main
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/coreos/go-etcd/etcd"
 )
@@ -15,8 +16,25 @@ var stop_watch = make(chan bool)
 
 func link_etcd() error {
 	Client = etcd.NewClient(Conf.Etcd_machines)
-	_, err := Client.CreateDir(Conf.Node_name, 0)
+	if _, err := Client.CreateDir(Conf.Node_name, 0); err != nil {
+		return
+	}
+	_, err := Client.Set("/core_bl/"+Conf.Listen_addr, "1", strconv.FormatInt(Conf.Heart_beat_time, 10))
 	return err
+}
+
+func heart_beat() chan error {
+	c := time.After(Conf.Heart_beat_time / 2)
+	ch := make(chan error)
+	for {
+		select {
+		case <-c:
+			_, err := Client.Update("/core_bl/"+Conf.Listen_addr, "1", strconv.FormatInt(Conf.Heart_beat_time, 10))
+			if err != nil {
+				ch <- err
+			}
+		}
+	}
 }
 
 func get_machines() error {
