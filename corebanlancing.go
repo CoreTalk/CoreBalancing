@@ -8,14 +8,18 @@ import (
 	"log"
 	"net/http"
 	"sort"
+	"strconv"
 	"sync"
 	"time"
+
+	"github.com/coreos/go-etcd/etcd"
 )
 
 var (
 	lock                 = new(sync.Mutex)
 	min_load_index int64 = 0
 	Servers        servers
+	temp_servers   servers
 )
 
 type servers []*Server
@@ -43,9 +47,19 @@ type Server struct {
 	Load    int64
 }
 
-func clear_servers() {
-	for _, s := range Servers {
+func clear_servers(ss *servers) {
+	for _, s := range *ss {
 		pool.Put(s)
+	}
+	*ss = (*ss)[:0]
+}
+
+func set_list(nodes []*etcd.Node, ss servers) {
+	for _, n := range nodes {
+		s := pool.Get().(*Server)
+		s.Address = n.Key
+		s.Load, _ = strconv.ParseInt(n.Value, 10, 64)
+		ss = append(ss, s)
 	}
 }
 
@@ -58,7 +72,7 @@ func main() {
 	if err := link_etcd(); err != nil {
 		log.Fatal(err)
 	}
-	if err := get_machines(); err != nil {
+	if err := get_machines(Servers); err != nil {
 		log.Fatal(err)
 	}
 	// Do the flush loop.
@@ -82,8 +96,10 @@ func get_min_load_server() string {
 	lock.Lock()
 	s := Servers[min_load_index]
 	s.Load++
-	if Servers[min_load_index].Load > Servers[min_load_index+1].Load {
-		min_load_index++
+	if s.Load > Servers[min_load_index+1].Load {
+		if min_load_index < int64(len(Servers)) {
+			min_load_index++
+		}
 	}
 	lock.Unlock()
 	return s.Address
@@ -94,14 +110,17 @@ func flush() {
 	for {
 		select {
 		case <-C:
-			get_machines()
-			sort_servers()
+			clear_servers(&temp_servers)
+			get_machines(temp_servers)
+			sort_servers(temp_servers)
+			lock.Lock()
+			Servers = temp_servers
+			lock.Unlock()
+			temp_servers = make(servers, 0, len(Servers))
 		}
 	}
 }
 
-func sort_servers() {
-	lock.Lock()
-	sort.Sort(Servers)
-	lock.Unlock()
+func sort_servers(ss servers) {
+	sort.Sort(ss)
 }

@@ -22,7 +22,7 @@ type Config struct {
 	Listen_addr string
 
 	// Heart beat time.
-	Heart_beat_time string
+	Heart_beat_time uint64
 }
 
 func pare_config() error {
