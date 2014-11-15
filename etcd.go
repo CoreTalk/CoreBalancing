@@ -26,15 +26,17 @@ func link_etcd() error {
 func heart_beat() chan error {
 	c := time.After(Conf.Heart_beat_time / 2)
 	ch := make(chan error)
-	for {
-		select {
-		case <-c:
-			_, err := Client.Update("/core_bl/"+Conf.Listen_addr, "1", strconv.FormatInt(Conf.Heart_beat_time, 10))
-			if err != nil {
-				ch <- err
+	go func(){
+		for {
+			select {
+			case <-c:
+				_, err := Client.Update("/core_bl/"+Conf.Listen_addr, "1", strconv.FormatInt(Conf.Heart_beat_time, 10))
+				if err != nil {
+					ch <- err
+				}
 			}
 		}
-	}
+	}()
 	return ch
 }
 
