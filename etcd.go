@@ -35,6 +35,7 @@ func heart_beat() chan error {
 			}
 		}
 	}
+	return ch
 }
 
 func get_machines() error {
