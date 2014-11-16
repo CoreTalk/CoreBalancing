@@ -5,6 +5,7 @@
 package main
 
 import (
+	"log"
 	"time"
 
 	"github.com/coreos/go-etcd/etcd"
@@ -14,23 +15,33 @@ var Client *etcd.Client
 var stop_watch = make(chan bool)
 
 func link_etcd() error {
-	Client = etcd.NewClient(Conf.Etcd_machines)
-	if _, err := Client.CreateDir(Conf.Node_name, 0); err != nil {
-		return err
+	Client = etcd.NewClient(Conf.Balancer.Etcd_machines)
+	if _, err := Client.CreateDir(Conf.Balancer.Node_name, 0); err != nil {
+		if err != nil {
+			if e, ok := err.(*etcd.EtcdError); ok {
+				if e.ErrorCode != 105 {
+					return err
+				}
+				log.Println("Key has been exist.")
+			} else {
+				return err
+			}
+		}
 	}
-	_, err := Client.Set("/core_bl/"+Conf.Listen_addr, "running", Conf.Heart_beat_time)
+	_, err := Client.Set("/core_bl/"+Conf.Balancer.Listen_addr, "running", Conf.Balancer.Heart_beat_time)
 	return err
 }
 
 func heart_beat() chan error {
-	c := time.After(time.Duration(Conf.Heart_beat_time / 2))
+	t := time.NewTicker(time.Duration(Conf.Balancer.Heart_beat_time/2) * time.Second)
 	ch := make(chan error)
 	go func() {
 		for {
 			select {
-			case <-c:
-				_, err := Client.Update("/core_bl/"+Conf.Listen_addr, "running", Conf.Heart_beat_time)
+			case <-t.C:
+				_, err := Client.Update("/core_bl/"+Conf.Balancer.Listen_addr, "running", Conf.Balancer.Heart_beat_time)
 				if err != nil {
+					log.Printf("Etcd hb error:%v", err)
 					ch <- err
 				}
 			}
@@ -39,8 +50,8 @@ func heart_beat() chan error {
 	return ch
 }
 
-func get_machines(ss servers) error {
-	resp, err := Client.Get(Conf.Node_name, false, false)
+func get_machines(ss *servers) error {
+	resp, err := Client.Get(Conf.Balancer.Node_name, false, false)
 	if err != nil {
 		return err
 	}

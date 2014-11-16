@@ -18,8 +18,8 @@ import (
 var (
 	lock                 = new(sync.Mutex)
 	min_load_index int64 = 0
-	Servers        servers
-	temp_servers   servers
+	Servers              = make(servers, 0)
+	temp_servers         = make(servers, 0)
 )
 
 type servers []*Server
@@ -54,51 +54,68 @@ func clear_servers(ss *servers) {
 	*ss = (*ss)[:0]
 }
 
-func set_list(nodes []*etcd.Node, ss servers) {
+func set_list(nodes []*etcd.Node, ss *servers) {
 	for _, n := range nodes {
 		s := pool.Get().(*Server)
-		s.Address = n.Key
+		s.Address = n.Key[len(Conf.Node_name)+1:]
 		s.Load, _ = strconv.ParseInt(n.Value, 10, 64)
-		ss = append(ss, s)
+		*ss = append(*ss, s)
 	}
 }
 
 func main() {
-	// Read the conf.
+	log.Println("Read the conf.")
+	// Read the Conf.Balancer.
 	if err := pare_config(); err != nil {
 		log.Fatal(err)
 	}
+	log.Println("Link the etcd.")
 	// Connect the etcd.
 	if err := link_etcd(); err != nil {
 		log.Fatal(err)
 	}
-	if err := get_machines(Servers); err != nil {
+	if err := get_machines(&Servers); err != nil {
 		log.Fatal(err)
 	}
 	// Do the flush loop.
 	go flush()
 	go http_listen()
+	log.Println("Find node:", len(Servers))
 	HandleSignal(InitSignal())
 }
 
 func http_listen() {
 	http.HandleFunc("/get_server", func(w http.ResponseWriter, r *http.Request) {
+		log.Println("A requset")
 		if r.Method != "GET" {
 			http.Error(w, "", http.StatusMethodNotAllowed)
 		}
 		// Return the min load server.
-		w.Write([]byte(get_min_load_server()))
+		s := get_min_load_server()
+		log.Println("Server is:", s)
+		if s == "" {
+			http.Error(w, "", http.StatusNotFound)
+		} else {
+			w.Write([]byte(s))
+		}
 	})
-	http.ListenAndServe(Conf.Listen_addr, nil)
+	log.Println("Listen http at port:", Conf.Balancer.Listen_addr)
+	log.Fatal(http.ListenAndServe(Conf.Balancer.Listen_addr, nil))
 }
 
 func get_min_load_server() string {
 	lock.Lock()
+	if len(Servers) == 0 {
+		lock.Unlock()
+		return ""
+	}
 	s := Servers[min_load_index]
 	s.Load++
-	if s.Load > Servers[min_load_index+1].Load {
-		if min_load_index < int64(len(Servers)) {
-			min_load_index++
+	if min_load_index+1 < int64(len(Servers)) {
+		if s.Load > Servers[min_load_index+1].Load {
+			if min_load_index < int64(len(Servers)) {
+				min_load_index++
+			}
 		}
 	}
 	lock.Unlock()
@@ -106,13 +123,15 @@ func get_min_load_server() string {
 }
 
 func flush() {
-	C := time.After(time.Duration(Conf.Interval))
+	C := time.NewTicker(time.Duration(Conf.Balancer.Interval) * time.Second).C
 	for {
 		select {
 		case <-C:
+			log.Println("Flush...")
 			clear_servers(&temp_servers)
-			get_machines(temp_servers)
+			get_machines(&temp_servers)
 			sort_servers(temp_servers)
+			log.Println("Discover server number:", len(temp_servers))
 			lock.Lock()
 			Servers = temp_servers
 			lock.Unlock()

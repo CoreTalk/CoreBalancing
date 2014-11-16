@@ -8,12 +8,16 @@ import (
 	"code.google.com/p/gcfg"
 )
 
-var Conf *Config
+var Conf = new(Config)
 
 type Config struct {
+	Balancer
+}
+
+type Balancer struct {
 	// [scheme]://[ip]:[port]
 	Etcd_machines []string
-	// Interval. Sort the servers.
+	// Interval. Sort the servers. < comet flush time.
 	Interval int64
 	// The etcd node's name.
 	Node_name string
@@ -26,5 +30,5 @@ type Config struct {
 }
 
 func pare_config() error {
-	return gcfg.ReadFileInto(Conf, "conf.user.conf")
+	return gcfg.ReadFileInto(Conf, "user.conf")
 }
