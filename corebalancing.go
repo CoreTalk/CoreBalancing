@@ -134,6 +134,7 @@ func flush() {
 			log.Println("Discover server number:", len(temp_servers))
 			lock.Lock()
 			Servers = temp_servers
+			min_load_index = 0
 			lock.Unlock()
 			temp_servers = make(servers, 0, len(Servers))
 		}
