@@ -33,7 +33,8 @@ func link_etcd() error {
 }
 
 func heart_beat() chan error {
-	t := time.NewTicker(time.Duration(Conf.Balancer.Heart_beat_time/2) * time.Second)
+	flush_time := time.Duration(float64(Conf.Balancer.Heart_beat_time) / 1.5)
+	t := time.NewTicker(flush_time * time.Second)
 	ch := make(chan error)
 	go func() {
 		for {
